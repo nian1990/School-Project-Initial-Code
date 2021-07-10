@@ -1,0 +1,410 @@
+---
+title: "Data Prep"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Read dataset for Residential Condo Unit type (research object)
+
+```{r}
+BostonCondo <- read.csv("Boston-Property-Assessment-data2020-condo.csv", stringsAsFactors = F, na.strings = (""))
+```
+
+2. Explore dataset
+  a. Dataset summary
+
+```{r}
+summary(BostonCondo)
+```
+
+
+
+```{r}
+#PID is unique 10-digit parcel number. First 2 digits are the ward, digits 3 to 7 are the parcel, and digits 8 to 10 are the sub-parcel. 
+#CM_ID is 10-digit parcel number of Condo Main, which houses all related condo units
+#GIS_ID see “PID
+#ZIPCODE is zip code of parcel.
+#PTYPE is state class code of the property.
+#All the attributes above are numeric in dataset; however, they are just identifiers, postal codes, or property type. Therefore, they don't have numeric characteristics and should be treated as characters.
+
+BostonCondo$PID <- as.character(BostonCondo$PID)
+BostonCondo$CM_ID <- as.character(BostonCondo$CM_ID)
+BostonCondo$GIS_ID <- as.character(BostonCondo$GIS_ID)
+BostonCondo$ZIPCODE <- as.character(BostonCondo$ZIPCODE)
+BostonCondo$PTYPE <- as.character(BostonCondo$PTYPE)
+```
+
+
+
+  b. Number of unique value for each rows
+
+```{r}
+sapply(BostonCondo, function(x)length(unique(x)))
+
+
+#All the three IDs (PID, CM_ID, GIS_ID) are identifiers for each property and should be treated as character instead of numeric attributes. As the unique values for these three IDs are large, they will significantly increase the time of algorithms used in this study. Therefore, they are not used in our study as independent attributes.
+#The same to ST_NUM, ST_NAME, ST_NAME_SUF, UNIT_NUM, OWNER, MAIL_ADDRESSEE, MAIL_ADDRESS, MAIL>CS, MAIL_ZIPCODE. All those attributes should be treated as characters. Due to large number of unique values, they are not recommended in this study.
+#Attributes LU, STRUCTURE_CLASS, R_BLDG_STYL, R_ROOF_TYP, R_EXT_FIN, R_TOTAL_RMS, R_DBRMS, R_FULL_BTH, R_HALF_BTH, R_BTH_STYLE, R_BTH_STYLE2, R_BTH_STYLE3, R_KITCH, R_KITCH_STYLE, R_KITCH_STYLE2, R_KITCH_STYLE3, R_HEAT_TYP, R_AC, R_FPLACE, R_EXT_CND, R_OVRALL_CND, R_INT_CND, R_INT_FIN, R_VIEW, S_NUM_BLDG, S_BLDG_STYL, S_UNIT_RES, S_UNIT_COM, S_UNIT_RC, S_EXT_FIN and S_EXT_CND only have 1 unique value. Besides LU has value "CD", others are all NA. Therefore, those attribues are not useful in our study.
+
+```
+
+```{r}
+#Remove those attributes
+BostonCondo <- BostonCondo[, c("ZIPCODE",	"PTYPE",	"OWN_OCC", "AV_LAND",	"AV_BLDG", "AV_TOTAL", "GROSS_TAX", "LAND_SF",	"YR_BUILT",	"YR_REMOD",	"GROSS_AREA",	"LIVING_AREA",	"NUM_FLOORS",	"U_BASE_FLOOR",	"U_NUM_PARK",	"U_CORNER",	"U_ORIENT",	"U_TOT_RMS",	"U_BDRMS",	"U_FULL_BTH",	"U_HALF_BTH",	"U_BTH_STYLE",	"U_BTH_STYLE2",	"U_BTH_STYLE3",	"U_KITCH_TYPE",	"U_KITCH_STYLE",	"U_HEAT_TYP",	"U_AC",	"U_FPLACE",	"U_INT_FIN",	"U_INT_CND",	"U_VIEW")]
+summary(BostonCondo)
+```
+
+  c. Missing values
+
+```{r}
+#Get the total missing values for each column and percentage
+apply(BostonCondo,2,function(x)sum(is.na(x)))
+apply(BostonCondo,2,function(x)sum(is.na(x)))/65749
+
+#The result below shows YR_REMOD, U_BTH_STYLE2, and U_BTH_STYLE3 have large portion of missing value; other attributes' missing values only consist of less than 1% for each column.
+#YR_REMOD is the year property was last remodeled. Here we can assume that the missing value means there has been no remodel for those properties. Therefore, we replace the missing value with 0. When building up the models.
+#U_BTH_STYLE2 and U_BTH_STYLE3 are condo unit bath style - bathroom #2 and condo unit bath style - bathroom #3 respectively. As not all condos have more than 1 bath room, we can assume that those properties without values for U_BTH_STYLE2 and U_BTH_STYLE3 don't have second or third bathrooms. So the missing values are replaced with character value "No".
+
+BostonCondo[which(is.na(BostonCondo$YR_REMOD)==T), "YR_REMOD"]<-0
+BostonCondo[which(is.na(BostonCondo$U_BTH_STYLE2)==T), "U_BTH_STYLE2"]<-"No"
+BostonCondo[which(is.na(BostonCondo$U_BTH_STYLE3)==T), "U_BTH_STYLE3"]<-"No"
+```
+
+```{r}
+#Get the total missing values for each row
+BostonCondo$count <- apply(BostonCondo, 1, function(x)sum(is.na(x)))
+#Get the total number of rows with missing value
+65749-sum(BostonCondo$count == 0)
+551/65749
+#The number of rows including missing values is only 551, less than 1% of the total rows.We can remove those rows to build our models.
+BostonCondo1 <- BostonCondo[which(BostonCondo$count <1),c(1:32)]
+```
+
+```{r}
+#Check if there is any missing value left in the dataset
+apply(BostonCondo1,2,function(x)sum(is.na(x)))
+```
+
+```{r}
+summary(BostonCondo1)
+```
+
+
+  d. Distribution and outliers
+
+```{r}
+library(ggplot2)
+```
+
+  
+```{r}
+ggplot(BostonCondo1, aes(x=ZIPCODE))+geom_bar()
+ggplot(BostonCondo1, aes(x=PTYPE))+geom_bar()
+ggplot(BostonCondo1, aes(x=OWN_OCC))+geom_bar()
+ggplot(BostonCondo1, aes(x=AV_LAND))+geom_histogram()
+ggplot(BostonCondo1, aes(x=AV_BLDG))+geom_histogram()
+ggplot(BostonCondo1, aes(x=AV_TOTAL))+geom_histogram()
+ggplot(BostonCondo1, aes(x=GROSS_TAX))+geom_histogram()
+ggplot(BostonCondo1, aes(x=LAND_SF))+geom_histogram()
+ggplot(BostonCondo1, aes(x=YR_BUILT))+geom_histogram()
+ggplot(BostonCondo1, aes(x=YR_REMOD))+geom_histogram()
+ggplot(BostonCondo1, aes(x=GROSS_AREA))+geom_histogram()
+ggplot(BostonCondo1, aes(x=LIVING_AREA))+geom_histogram()
+ggplot(BostonCondo1, aes(x=NUM_FLOORS))+geom_histogram()
+ggplot(BostonCondo1, aes(x=U_BASE_FLOOR))+geom_histogram()
+ggplot(BostonCondo1, aes(x=U_NUM_PARK))+geom_histogram()
+ggplot(BostonCondo1, aes(x=U_CORNER))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_ORIENT))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_TOT_RMS))+geom_histogram()
+ggplot(BostonCondo1, aes(x=U_BDRMS))+geom_histogram()
+ggplot(BostonCondo1, aes(x=U_FULL_BTH))+geom_histogram()
+ggplot(BostonCondo1, aes(x=U_HALF_BTH))+geom_histogram()
+ggplot(BostonCondo1, aes(x=U_BTH_STYLE))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_BTH_STYLE2))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_BTH_STYLE3))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_KITCH_TYPE))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_KITCH_STYLE))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_HEAT_TYP))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_AC))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_FPLACE))+geom_histogram()
+ggplot(BostonCondo1, aes(x=U_INT_FIN))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_INT_CND))+geom_bar()
+ggplot(BostonCondo1, aes(x=U_VIEW))+geom_bar()
+```
+
+```{r}
+#First, PTYPE only has 1 unique value, we can remove it from the current dataset.
+#Second, the attribute AV_LAND only has one value not equal to 0, as well as LAND_SF. We can safely remove these two attributes from our dataset as they don't impact our result much.
+BostonCondo1_WO <- BostonCondo1[,-c(2,4,8)]
+
+#According to the graphs shown above, almost all the numeric attributes have very skewed distribution, which means that there might be large portion of outliers.
+#Calculate number of outliers for the numeric attributes with numerous unique numbers.
+sum(BostonCondo1_WO$AV_BLDG %in% boxplot.stats(BostonCondo1_WO$AV_BLDG)$out)
+sum(BostonCondo1_WO$AV_TOTAL %in% boxplot.stats(BostonCondo1_WO$AV_TOTAL)$out)
+sum(BostonCondo1_WO$GROSS_TAX %in% boxplot.stats(BostonCondo1_WO$GROSS_TAX)$out)
+sum(BostonCondo1_WO$GROSS_AREA %in% boxplot.stats(BostonCondo1_WO$GROSS_AREA)$out)
+sum(BostonCondo1_WO$LIVING_AREA %in% boxplot.stats(BostonCondo1_WO$LIVING_AREA)$out)
+```
+
+```{r}
+#Remove rows containing outliers for those numeric attributes
+BostonCondo1_NoO <- BostonCondo1_WO[
+!BostonCondo1_WO$AV_BLDG %in% boxplot.stats(BostonCondo1_WO$AV_BLDG)$out&
+!BostonCondo1_WO$AV_TOTAL %in% boxplot.stats(BostonCondo1_WO$AV_TOTAL)$out&
+!BostonCondo1_WO$GROSS_TAX %in% boxplot.stats(BostonCondo1_WO$GROSS_TAX)$out&
+!BostonCondo1_WO$GROSS_AREA %in% boxplot.stats(BostonCondo1_WO$GROSS_AREA)$out&
+!BostonCondo1_WO$LIVING_AREA %in% boxplot.stats(BostonCondo1_WO$LIVING_AREA)$out,]
+```
+ 
+```{r}
+summary(BostonCondo1_NoO)
+```
+
+```{r}
+ggplot(BostonCondo1_NoO, aes(x=ZIPCODE))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=OWN_OCC))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=AV_BLDG))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=AV_TOTAL))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=GROSS_TAX))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=YR_BUILT))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=YR_REMOD))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=GROSS_AREA))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=LIVING_AREA))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=NUM_FLOORS))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=U_BASE_FLOOR))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=U_NUM_PARK))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=U_CORNER))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_ORIENT))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_TOT_RMS))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=U_BDRMS))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=U_FULL_BTH))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=U_HALF_BTH))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=U_BTH_STYLE))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_BTH_STYLE2))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_BTH_STYLE3))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_KITCH_TYPE))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_KITCH_STYLE))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_HEAT_TYP))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_AC))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_FPLACE))+geom_histogram()
+ggplot(BostonCondo1_NoO, aes(x=U_INT_FIN))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_INT_CND))+geom_bar()
+ggplot(BostonCondo1_NoO, aes(x=U_VIEW))+geom_bar()
+```
+
+```{r}
+#According to the graphs based on dataset without outliers, we can see most of the numeric values are inclined towards normal distribution.
+#This project will use both dataset with and without outliers to build the models and see how they impact the performance.
+```
+
+
+  e. Correlation and multicollinearity
+  
+```{r}
+library(corrplot)
+```
+
+```{r}
+#Correlations of all numeric attributes
+cor_Num<- cor(BostonCondo1_WO[,c("AV_BLDG","AV_TOTAL", "GROSS_TAX", "YR_BUILT", "YR_REMOD", "GROSS_AREA", "LIVING_AREA", "NUM_FLOORS", "U_BASE_FLOOR", "U_NUM_PARK", "U_TOT_RMS", "U_BDRMS", "U_FULL_BTH", "U_HALF_BTH", "U_FPLACE")])
+cor_Num
+```
+  
+```{r}
+corrplot(cor_Num, type="lower")
+
+#According to the result of correlation of all numeric attributes, AV_BLDG, AV_TOTAL and GROSS_TAX have very strong positive correlation (greater than 0.9999). Therefore, we can safely remove any two of the three attributes. Here we keep AV_BLDG (the dependent attribute).
+#GROSS_AREA and LIVING_AREA have very strong positive correlation (greater than 0.98); thus, we can remove one of the attributes. We keep GROSS_AREA.
+#U_TOT_RMS and U_BDRMS have strong positive correlation (greater than 0.8). We can use U_BDRMS only for model building.
+```
+
+```{r}
+library(greybox)
+```
+
+
+```{r}
+#Chi-Square of independence of categorical attributes
+#"ZIPCODE",	"OWN_OCC", "U_CORNER",	"U_ORIENT",	"U_BTH_STYLE",	"U_BTH_STYLE2",	"U_BTH_STYLE3",	"U_KITCH_TYPE",	"U_KITCH_STYLE",	"U_HEAT_TYP",	"U_AC","U_INT_FIN",	"U_INT_CND",	"U_VIEW"
+
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$OWN_OCC)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_CORNER)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_ORIENT)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_BTH_STYLE)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_BTH_STYLE2)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_BTH_STYLE3)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_KITCH_TYPE)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_KITCH_STYLE)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_HEAT_TYP)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_AC)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$ZIPCODE, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_CORNER)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_ORIENT)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_BTH_STYLE)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_BTH_STYLE2)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_BTH_STYLE3)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_KITCH_TYPE)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_KITCH_STYLE)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_HEAT_TYP)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_AC)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$OWN_OCC, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_ORIENT)
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_BTH_STYLE)
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_BTH_STYLE2)
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_BTH_STYLE3)
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_KITCH_TYPE)
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_KITCH_STYLE)
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_HEAT_TYP)
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_AC)
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$U_CORNER, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_ORIENT, BostonCondo1_WO$U_BTH_STYLE)
+cramer(BostonCondo1_WO$U_ORIENT, BostonCondo1_WO$U_BTH_STYLE2)
+cramer(BostonCondo1_WO$U_ORIENT, BostonCondo1_WO$U_BTH_STYLE3)
+cramer(BostonCondo1_WO$U_ORIENT, BostonCondo1_WO$U_KITCH_TYPE)
+cramer(BostonCondo1_WO$U_ORIENT, BostonCondo1_WO$U_KITCH_STYLE)
+cramer(BostonCondo1_WO$U_ORIENT, BostonCondo1_WO$U_HEAT_TYP)
+cramer(BostonCondo1_WO$U_ORIENT, BostonCondo1_WO$U_AC)
+cramer(BostonCondo1_WO$U_ORIENT, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$U_ORIENT, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$U_ORIENT, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_BTH_STYLE, BostonCondo1_WO$U_BTH_STYLE2)
+cramer(BostonCondo1_WO$U_BTH_STYLE, BostonCondo1_WO$U_BTH_STYLE3)
+cramer(BostonCondo1_WO$U_BTH_STYLE, BostonCondo1_WO$U_KITCH_TYPE)
+cramer(BostonCondo1_WO$U_BTH_STYLE, BostonCondo1_WO$U_KITCH_STYLE)
+cramer(BostonCondo1_WO$U_BTH_STYLE, BostonCondo1_WO$U_HEAT_TYP)
+cramer(BostonCondo1_WO$U_BTH_STYLE, BostonCondo1_WO$U_AC)
+cramer(BostonCondo1_WO$U_BTH_STYLE, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$U_BTH_STYLE, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$U_BTH_STYLE, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_BTH_STYLE2, BostonCondo1_WO$U_BTH_STYLE3)
+cramer(BostonCondo1_WO$U_BTH_STYLE2, BostonCondo1_WO$U_KITCH_TYPE)
+cramer(BostonCondo1_WO$U_BTH_STYLE2, BostonCondo1_WO$U_KITCH_STYLE)
+cramer(BostonCondo1_WO$U_BTH_STYLE2, BostonCondo1_WO$U_HEAT_TYP)
+cramer(BostonCondo1_WO$U_BTH_STYLE2, BostonCondo1_WO$U_AC)
+cramer(BostonCondo1_WO$U_BTH_STYLE2, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$U_BTH_STYLE2, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$U_BTH_STYLE2, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_BTH_STYLE3, BostonCondo1_WO$U_KITCH_TYPE)
+cramer(BostonCondo1_WO$U_BTH_STYLE3, BostonCondo1_WO$U_KITCH_STYLE)
+cramer(BostonCondo1_WO$U_BTH_STYLE3, BostonCondo1_WO$U_HEAT_TYP)
+cramer(BostonCondo1_WO$U_BTH_STYLE3, BostonCondo1_WO$U_AC)
+cramer(BostonCondo1_WO$U_BTH_STYLE3, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$U_BTH_STYLE3, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$U_BTH_STYLE3, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_KITCH_TYPE, BostonCondo1_WO$U_KITCH_STYLE)
+cramer(BostonCondo1_WO$U_KITCH_TYPE, BostonCondo1_WO$U_HEAT_TYP)
+cramer(BostonCondo1_WO$U_KITCH_TYPE, BostonCondo1_WO$U_AC)
+cramer(BostonCondo1_WO$U_KITCH_TYPE, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$U_KITCH_TYPE, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$U_KITCH_TYPE, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_KITCH_STYLE, BostonCondo1_WO$U_HEAT_TYP)
+cramer(BostonCondo1_WO$U_KITCH_STYLE, BostonCondo1_WO$U_AC)
+cramer(BostonCondo1_WO$U_KITCH_STYLE, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$U_KITCH_STYLE, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$U_KITCH_STYLE, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_HEAT_TYP, BostonCondo1_WO$U_AC)
+cramer(BostonCondo1_WO$U_HEAT_TYP, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$U_HEAT_TYP, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$U_HEAT_TYP, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_AC, BostonCondo1_WO$U_INT_FIN)
+cramer(BostonCondo1_WO$U_AC, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$U_AC, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_INT_FIN, BostonCondo1_WO$U_INT_CND)
+cramer(BostonCondo1_WO$U_INT_FIN, BostonCondo1_WO$U_VIEW)
+
+cramer(BostonCondo1_WO$U_INT_CND, BostonCondo1_WO$U_VIEW)
+
+#The p-value for all the combinations is 0. Therefore, we can reject the null hypothesis and concludes that all the categorical attribues are independent from each other.
+
+```
+
+
+```{r}
+library(regclass)
+```
+
+```{r}
+X <- lm(AV_BLDG~., data = BostonCondo1_WO)
+round(VIF(X),3)
+```
+
+
+```{r}
+X2 <- lm(AV_BLDG~., data=BostonCondo1_NoO)
+round(VIF(X2),3)
+```
+
+```{r}
+#According to the VIF values, AV_TOTAL and GROSS_TAX have very large VIF and LIVING_AREA and GROSS_AREA have relatively large value (bigger than 5).
+#Let's remove AV_TOTAL first
+X <- lm(AV_BLDG~.-AV_TOTAL, data = BostonCondo1_WO)
+round(VIF(X),3)
+X2 <- lm(AV_BLDG~.-AV_TOTAL, data=BostonCondo1_NoO)
+round(VIF(X2),3)
+#Now remove LIVING_AREA
+X <- lm(AV_BLDG~.-AV_TOTAL-LIVING_AREA, data = BostonCondo1_WO)
+round(VIF(X),3)
+X2 <- lm(AV_BLDG~.-AV_TOTAL-LIVING_AREA, data=BostonCondo1_NoO)
+round(VIF(X2),3)
+```
+
+```{r}
+#From the VIF results above, we can conclude that removing AV_TOTAL and LIVING_AREA can decrease multilinearity for linear regression model.
+```
+
+
+```{r}
+#So we only remove the numeric attributes with strong correlations and those indentified in VIF evaluation.
+
+BostonCondo1_WO2 <- BostonCondo1_WO[,!(names(BostonCondo1_WO) %in% c("AV_TOTAL", "GROSS_TAX", "LIVING_AREA", "U_TOT_RMS"))]
+BostonCondo1_NoO2 <- BostonCondo1_NoO[,!(names(BostonCondo1_WO) %in% c("AV_TOTAL", "GROSS_TAX", "LIVING_AREA", "U_TOT_RMS"))]
+```
+
+
+
+3. Stepforward Feature Selection
+
+
+
+```{r}
+null <- lm(AV_BLDG~1, data=BostonCondo1_WO2)
+full <- lm(AV_BLDG~., data=BostonCondo1_WO2)
+step4 <- step(null, scope = list(lower=null, upper = full), data=BostonCondo1_WO2, method = "stepforward")
+```
+
+```{r}
+#The stepforward selection keeps all variables we selecte from previous steps. So our final dataset with outliers is:
+write.csv(BostonCondo1_WO2, "Boston_Condo_w_Outliers.csv")
+```
+
+
+```{r}
+null2 <- lm(AV_BLDG~1, data=BostonCondo1_NoO2)
+full2<- lm(AV_BLDG~., data=BostonCondo1_NoO2)
+step42 <- step(null2, scope = list(lower=null2, upper = full2), data=BostonCondo1_NoO2, method = "stepforward")
+```
+
+```{r}
+#The stepforward selection keeps all variables we selecte from previous steps. So our final dataset without outliers is:
+write.csv(BostonCondo1_NoO2, "Boston_Condo_no_Outliers.csv")
+```

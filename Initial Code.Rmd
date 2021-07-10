@@ -1,0 +1,510 @@
+---
+title: "Initial Code"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Read dataset
+#Dataset with outliers
+BostonCondo_OT <- read.csv("Boston_Condo_w_Outliers.csv", stringsAsFactors = F)
+#Dataset without outliers
+BostonCondo_No_OT <- read.csv("Boston_Condo_no_Outliers.csv", stringsAsFactors = F)
+BostonCondo_OT <- BostonCondo_OT[,-1]
+BostonCondo_No_OT <- BostonCondo_No_OT[,-1]
+BostonCondo_OT$ZIPCODE <-as.character(BostonCondo_OT$ZIPCODE)
+BostonCondo_No_OT$ZIPCODE <- as.character(BostonCondo_No_OT$ZIPCODE)
+```
+
+```{r}
+str(BostonCondo_OT)
+str(BostonCondo_No_OT)
+```
+
+```{r}
+library(caret)
+```
+
+Scenario 1: With outliers
+
+```{r}
+#Split the dataset into training and testing (90% Training, 10% Testing)
+#folds1 <- createFolds(BostonCondo_OT$AV_BLDG)
+#
+#for (f in folds1){
+#  train1 <- BostonCondo_OT[-f,]
+#  test1 <- BostonCondo_OT[f,]
+#}
+```
+
+```{r}
+#save training & testing dataset
+#write.csv(train1, "train1.csv")
+#wirte.csv(test1, "test1.csv")
+```
+
+```{r}
+#Read dataset
+train1 <- read.csv("train1.csv", stringsAsFactors = F)
+test1 <- read.csv("test1.csv", stringsAsFactors = F)
+train1 <- train1[,-1]
+test1 <- test1[,-1]
+train1$ZIPCODE <-as.character(train1$ZIPCODE)
+test1$ZIPCODE <- as.character(test1$ZIPCODE)
+```
+
+
+```{r}
+#multi linear regression - 5 fold cross validation
+startime <- Sys.time()
+control1_1 <- trainControl(method="cv", number = 10)
+mlr1 <- train(AV_BLDG~., data = train1, method ="lm", trControl=control1_1)
+endtime <- Sys.time()
+endtime - startime
+```
+
+```{r}
+mlr1
+summary(mlr1)
+```
+
+```{r}
+predict_mlr1 <- predict(mlr1, test1)
+```
+
+```{r}
+#Calculate the performance metrics for the prediction on testing set
+# R2 is R-Squared. It measures how much the variance in the dependent variable which is explained by the model
+# RMSE is root mean squared error. It measures the standard deviation of residuals
+#MAE is Mean absolute error, the average of the absolute difference between the actual and predicted values in the dataset. It measures the average of the residuals in the dataset
+data.frame( R2_1_1 = R2(predict_mlr1, test1$AV_BLDG),
+            RMSE_1_1 = RMSE(predict_mlr1, test1$AV_BLDG),
+            MAE_1_1 = MAE(predict_mlr1, test1$AV_BLDG))
+```
+
+
+
+```{r}
+x= 1:length(test1$AV_BLDG)
+
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment - Actual Value")
+plot(x, predict_mlr1, col='blue', ylab = "Value", type="p", main="Boston Condo Property Assessment - Predicted Value")
+```
+
+```{r}
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment")
+par(new=T)
+plot(x, predict_mlr1, col='blue', ylab = "", type="p")
+legend("topright", legend=c("Actual Value", "Predicted Value"), fill = c("red","blue"), col=2:3, adj=c(0,0.6))
+grid()
+```
+
+```{r}
+plot(predict_mlr1, test1$AV_BLDG, xlab = "preidtced value", ylab = "actual value")
+abline(a=0,b=1)
+```
+
+```{r}
+library(randomForest)
+```
+
+```{r}
+#random forest with 5 trees
+startime <- Sys.time()
+control1_2 <- trainControl(method="cv", number = 10, search = "grid")
+rf1_1 <- train(AV_BLDG~., data = train1, method ="rf", ntree=5, trControl=control1_2)
+endtime <- Sys.time()
+endtime - startime
+```
+
+
+```{r}
+rf1_1
+plot(rf1_1)
+```
+
+```{r}
+#preidct on test set
+predict_rf1_1 <- predict(rf1_1, test1)
+```
+
+```{r}
+#Show performance metrics on test set
+data.frame( R2_1_2 = R2(predict_rf1_1, test1$AV_BLDG),
+            RMSE_1_2 = RMSE(predict_rf1_1, test1$AV_BLDG),
+            MAE_1_2 = MAE(predict_rf1_1, test1$AV_BLDG))
+```
+
+
+```{r}
+#visualize the results of actual value and predicted value
+x= 1:length(test1$AV_BLDG)
+
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment - Actual Value")
+plot(x, predict_rf1_1, col='blue', ylab = "Value", type="p", main="Boston Condo Property Assessment - Predicted Value")
+```
+
+```{r}
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment")
+par(new=T)
+plot(x, predict_rf1_1, col='blue', ylab = "", type="p")
+legend("topright", legend=c("Actual Value", "Predicted Value"), fill = c("red","blue"), col=2:3, adj=c(0,0.6))
+grid()
+```
+
+```{r}
+#Visualize how close predicted value and actual value are
+plot(predict_rf1_1, test1$AV_BLDG, xlab = "preidtced value", ylab = "actual value")
+abline(a=0,b=1)
+```
+
+```{r}
+#random forest with 10 trees
+startime <- Sys.time()
+rf1_2 <- train(AV_BLDG~., data = train1, method ="rf", ntree=10, trControl=control1_2)
+endtime <- Sys.time()
+endtime - startime
+```
+
+```{r}
+rf1_2
+plot(rf1_2)
+```
+
+```{r}
+predict_rf1_2 <- predict(rf1_2, test1)
+```
+
+```{r}
+data.frame( R2_1_3 = R2(predict_rf1_2, test1$AV_BLDG),
+            RMSE_1_3 = RMSE(predict_rf1_2, test1$AV_BLDG),
+            MAE_1_3 = MAE(predict_rf1_2, test1$AV_BLDG))
+```
+
+
+```{r}
+#visualize the results of actual value and predicted value
+x= 1:length(test1$AV_BLDG)
+
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment - Actual Value")
+plot(x, predict_rf1_2, col='blue', ylab = "Value", type="p", main="Boston Condo Property Assessment - Predicted Value")
+```
+
+```{r}
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment")
+par(new=T)
+plot(x, predict_rf1_2, col='blue', ylab = "", type="p")
+legend("topright", legend=c("Actual Value", "Predicted Value"), fill = c("red","blue"), col=2:3, adj=c(0,0.6))
+grid()
+```
+
+```{r}
+#Visualize how close predicted value and actual value are
+plot(predict_rf1_2, test1$AV_BLDG, xlab = "preidtced value", ylab = "actual value")
+abline(a=0,b=1)
+```
+
+
+```{r}
+library(class)
+library(dplyr)
+```
+
+
+```{r}
+#prepare data for k nearest neighbor regression
+x_train1 = train1
+x_test1 = test1
+```
+
+```{r}
+#onehot encoding
+dmy1 <- dummyVars(" ~ .", data = x_train1)
+x_train1 <- data.frame(predict(dmy1, newdata = x_train1))
+dmy2 <- dummyVars(" ~ .", data = x_test1)
+x_test1 <- data.frame(predict(dmy2, newdata = x_test1))
+```
+
+
+```{r}
+#plug 0 value into attributes missing from test set after one hot encoding 
+x_test1$U_HEAT_TYPN...None <- 0
+x_test1 <- x_test1 %>% relocate(U_HEAT_TYPN...None, .after = U_HEAT_TYPF...Forced.Hot.Air)
+```
+
+
+```{r}
+#k nearest regression
+startime <- Sys.time()
+knn1 <- train(AV_BLDG~., data = x_train1, method ="knn", trControl=control1_1, tuneGrid = expand.grid(k=1:2))
+endtime <- Sys.time()
+endtime - startime
+```
+
+```{r}
+knn1
+```
+
+```{r}
+predict_knn1 <- predict(knn1, x_test1)
+```
+
+
+```{r}
+data.frame( R2_1_4 = R2(predict_knn1, x_test1$AV_BLDG),
+            RMSE_1_4 = RMSE(predict_knn1, x_test1$AV_BLDG),
+            MAE_1_4 = MAE(predict_knn1, x_test1$AV_BLDG))
+```
+
+
+```{r}
+x= 1:length(x_test1$AV_BLDG)
+
+plot(x, x_test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment - Actual Value")
+plot(x, predict_knn1, col='blue', ylab = "Value", type="p", main="Boston Condo Property Assessment - Predicted Value")
+```
+
+```{r}
+plot(x, x_test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment")
+par(new=T)
+plot(x, predict_knn1, col='blue', ylab = "", type="p")
+legend("topright", legend=c("Actual Value", "Predicted Value"), fill = c("red","blue"), col=2:3, adj=c(0,0.6))
+grid()
+```
+
+```{r}
+plot(predict_knn1, x_test1$AV_BLDG, xlab = "preidtced value", ylab = "actual value")
+abline(a=0,b=1)
+```
+
+
+Scenario 2. Without Outliers in training set
+
+
+```{r}
+#remove rows including outliers
+train2 <- train1[train1$AV_BLDG %in% BostonCondo_No_OT$AV_BLDG,]
+```
+
+```{r}
+#multi linear regression
+startime <- Sys.time()
+control2_1 <- trainControl(method="cv", number = 10)
+mlr2 <- train(AV_BLDG~., data = train2, method ="lm", trControl=control2_1)
+endtime <- Sys.time()
+endtime - startime
+```
+
+```{r}
+mlr2
+summary(mlr2)
+```
+
+```{r}
+predict_mlr2 <- predict(mlr2, test1)
+```
+
+```{r}
+#Calculate the performance metrics for the prediction on testing set
+# R2 is R-Squared. It measures how much the variance in the dependent variable which is explained by the model
+# RMSE is root mean squared error. It measures the standard deviation of residuals
+#MAE is Mean absolute error, the average of the absolute difference between the actual and predicted values in the dataset. It measures the average of the residuals in the dataset
+data.frame( R2_2_1 = R2(predict_mlr2, test1$AV_BLDG),
+            RMSE_2_1 = RMSE(predict_mlr2, test1$AV_BLDG),
+            MAE_2_1 = MAE(predict_mlr2, test1$AV_BLDG))
+```
+
+
+
+```{r}
+x= 1:length(test1$AV_BLDG)
+
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment - Actual Value")
+plot(x, predict_mlr2, col='blue', ylab = "Value", type="p", main="Boston Condo Property Assessment - Predicted Value")
+```
+
+
+```{r}
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment")
+par(new=T)
+plot(x, predict_mlr2, col='blue', ylab = "", type="p")
+legend("topright", legend=c("Actual Value", "Predicted Value"), fill = c("red","blue"), col=2:3, adj=c(0,0.6))
+grid()
+```
+
+```{r}
+plot(predict_mlr2, test1$AV_BLDG, xlab = "preidtced value", ylab = "actual value")
+abline(a=0,b=1)
+```
+
+```{r}
+#random forest with 5 trees
+startime <- Sys.time()
+control2_2 <- trainControl(method="cv", number = 10, search = "grid")
+rf2_1 <- train(AV_BLDG~., data = train2, method ="rf", ntree=5, trControl=control2_2)
+endtime <- Sys.time()
+endtime - startime
+```
+
+```{r}
+rf2_1
+plot(rf2_1)
+```
+
+
+```{r}
+#preidct on test set
+predict_rf2_1 <- predict(rf2_1, test1)
+```
+
+```{r}
+#Show performance metrics on test set
+data.frame( R2_2_2 = R2(predict_rf2_1, test1$AV_BLDG),
+            RMSE_2_2 = RMSE(predict_rf2_1, test1$AV_BLDG),
+            MAE_2_2 = MAE(predict_rf2_1, test1$AV_BLDG))
+```
+
+
+```{r}
+#visualize the results of actual value and predicted value
+x= 1:length(test1$AV_BLDG)
+
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment - Actual Value")
+plot(x, predict_rf2_1, col='blue', ylab = "Value", type="p", main="Boston Condo Property Assessment - Predicted Value")
+```
+
+```{r}
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment")
+par(new=T)
+plot(x, predict_rf2_1, col='blue', ylab = "", type="p")
+legend("topright", legend=c("Actual Value", "Predicted Value"), fill = c("red","blue"), col=2:3, adj=c(0,0.6))
+grid()
+```
+
+```{r}
+#Visualize how close predicted value and actual value are
+plot(predict_rf2_1, test1$AV_BLDG, xlab = "preidtced value", ylab = "actual value")
+abline(a=0,b=1)
+```
+
+```{r}
+#random forest with 10 trees
+startime <- Sys.time()
+rf2_2 <- train(AV_BLDG~., data = train2, method ="rf", ntree=10, trControl=control2_2)
+endtime <- Sys.time()
+endtime - startime
+```
+
+```{r}
+rf2_2
+plot(rf2_2)
+```
+
+```{r}
+predict_rf2_2 <- predict(rf2_2, test1)
+```
+
+```{r}
+data.frame( R2_2_3 = R2(predict_rf2_2, test1$AV_BLDG),
+            RMSE_2_3 = RMSE(predict_rf2_2, test1$AV_BLDG),
+            MAE_2_3 = MAE(predict_rf2_2, test1$AV_BLDG))
+```
+
+
+```{r}
+#visualize the results of actual value and predicted value
+x= 1:length(test1$AV_BLDG)
+
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment - Actual Value")
+plot(x, predict_rf2_2, col='blue', ylab = "Value", type="p", main="Boston Condo Property Assessment - Predicted Value")
+```
+
+```{r}
+plot(x, test1$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment")
+par(new=T)
+plot(x, predict_rf2_2, col='blue', ylab = "", type="p")
+legend("topright", legend=c("Actual Value", "Predicted Value"), fill = c("red","blue"), col=2:3, adj=c(0,0.6))
+grid()
+```
+
+```{r}
+#Visualize how close predicted value and actual value are
+plot(predict_rf2_2, test1$AV_BLDG, xlab = "preidtced value", ylab = "actual value")
+abline(a=0,b=1)
+```
+
+
+
+```{r}
+#prepare data for k nearest neighbor regression
+x_train2 = train2
+x_test2 = test1
+```
+
+```{r}
+#onehot encoding
+dmy1 <- dummyVars(" ~ .", data = x_train2)
+x_train2 <- data.frame(predict(dmy1, newdata = x_train2))
+dmy2 <- dummyVars(" ~ .", data = x_test2)
+x_test2 <- data.frame(predict(dmy2, newdata = x_test2))
+```
+
+
+```{r}
+#plug 0 value into attributes missing from test set after one hot encoding
+x_test2$U_HEAT_TYPN...None <- 0
+x_test2 <- x_test1 %>% relocate(U_HEAT_TYPN...None, .after = U_HEAT_TYPF...Forced.Hot.Air)
+```
+
+
+```{r}
+#k nearest regression
+startime <- Sys.time()
+knn2 <- train(AV_BLDG~., data = x_train1, method ="knn", trControl=control2_1, tuneGrid = expand.grid(k=1:2))
+endtime <- Sys.time()
+endtime - startime
+```
+
+```{r}
+knn2
+```
+
+```{r}
+predict_knn2 <- predict(knn2, x_test2)
+```
+
+
+```{r}
+data.frame( R2_2_4 = R2(predict_knn2, x_test2$AV_BLDG),
+            RMSE_2_4 = RMSE(predict_knn2, x_test2$AV_BLDG),
+            MAE_2_4 = MAE(predict_knn2, x_test2$AV_BLDG))
+```
+
+
+```{r}
+x= 1:length(x_test2$AV_BLDG)
+
+plot(x, x_test2$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment - Actual Value")
+plot(x, predict_knn2, col='blue', ylab = "Value", type="p", main="Boston Condo Property Assessment - Predicted Value")
+```
+
+```{r}
+plot(x, x_test2$AV_BLDG, col="red", ylab = "Value", type="p",main="Boston Condo Property Assessment")
+par(new=T)
+plot(x, predict_knn2, col='blue', ylab = "", type="p")
+legend("topright", legend=c("Actual Value", "Predicted Value"), fill = c("red","blue"), col=2:3, adj=c(0,0.6))
+grid()
+```
+
+```{r}
+plot(predict_knn2, x_test2$AV_BLDG, xlab = "preidtced value", ylab = "actual value")
+abline(a=0,b=1)
+```
+
+
+
